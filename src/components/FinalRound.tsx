@@ -1,7 +1,9 @@
 import { useEffect, useEffectEvent, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
 import type { FinalResult } from '../types'
+import { PLAYER_COUNT } from '../types'
 import { FINAL_SECONDS, FINAL_SONGS } from '../data/songs'
+import { buzzerRoom } from '../buzzer'
 import { playDing, playWrong } from '../sfx'
 import KeyHints from './KeyHints'
 
@@ -12,13 +14,14 @@ import KeyHints from './KeyHints'
 type Stage = 'ready' | 'playing' | 'stopped' | FinalResult['outcome']
 
 interface Props {
+  playerIndex: number // the finalist, whose phone works as the stop button
   onDone: (result: FinalResult) => void
   onBack: () => void
 }
 
 const HINTS: Record<Stage, [string, string][]> = {
   ready: [['Space', 'старт'], ['←', 'назад']],
-  playing: [['Space', 'стоп — гравець відповідає'], ['→', 'пропустити'], ['клік на номер', 'обрати мелодію']],
+  playing: [['Space', 'стоп — гравець відповідає (або кнопка на телефоні)'], ['→', 'пропустити'], ['клік на номер', 'обрати мелодію']],
   stopped: [['Enter', 'правильно'], ['Backspace', 'неправильно'], ['→', 'пропустити'], ['Esc', 'грати далі']],
   won: [['Space', 'далі']],
   wrong: [['Space', 'далі']],
@@ -34,7 +37,7 @@ const OUTCOME_TEXT: Record<FinalResult['outcome'], string> = {
 const TOTAL_MS = FINAL_SECONDS * 1000
 const WAVE_BARS = [0.35, 0.7, 1, 0.55, 0.8]
 
-export default function FinalRound({ onDone, onBack }: Props) {
+export default function FinalRound({ playerIndex, onDone, onBack }: Props) {
   const [stage, setStage] = useState<Stage>('ready')
   const [guessed, setGuessed] = useState<boolean[]>(() => FINAL_SONGS.map(() => false))
   const [current, setCurrent] = useState(0)
@@ -174,6 +177,23 @@ export default function FinalRound({ onDone, onBack }: Props) {
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
   }, [])
+
+  // the finalist's phone is the stop button: a tap is the same as the host pressing Space
+  const onPhoneBuzz = useEffectEvent((slot: number) => {
+    if (slot === playerIndex && stage === 'playing') stop()
+  })
+
+  useEffect(() => buzzerRoom.onBuzz((slot) => onPhoneBuzz(slot)), [])
+
+  // live only while a melody plays, and only for the finalist: everyone else is locked out
+  useEffect(() => {
+    if (stage === 'playing') {
+      buzzerRoom.arm(Array.from({ length: PLAYER_COUNT }, (_, i) => i).filter((i) => i !== playerIndex))
+    } else if (stage === 'stopped') buzzerRoom.showBuzzed(playerIndex)
+    else buzzerRoom.idle()
+  }, [stage, playerIndex])
+
+  useEffect(() => () => buzzerRoom.idle(), [])
 
   const seconds = Math.ceil(remainingMs / 1000)
 

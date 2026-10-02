@@ -132,7 +132,7 @@ export default function App() {
       {state.phase === 'bid' && (
         <BidRound players={players} scores={state.scores} onScore={addScore} onDone={finishRound} onBack={goBack} />
       )}
-      {state.phase === 'final' && <FinalRound onDone={finishFinal} onBack={goBack} />}
+      {state.phase === 'final' && <FinalRound playerIndex={players[0].index} onDone={finishFinal} onBack={goBack} />}
       {state.phase === 'standings' && (
         <StandingsScreen
           round={state.round}
