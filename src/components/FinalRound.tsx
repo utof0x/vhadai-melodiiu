@@ -198,9 +198,10 @@ export default function FinalRound({ onDone, onBack }: Props) {
                 onMouseDown={(e) => e.preventDefault()}
                 onClick={() => clickDisc(i)}
               >
-                <Wave />
+                {/* only the active melody carries a waveform; the rest are plain numbers */}
+                {i === current && !isOver && <Wave />}
                 <span className="final-disc-number">{i + 1}</span>
-                <Wave />
+                {i === current && !isOver && <Wave />}
               </button>
             ))}
           </div>
