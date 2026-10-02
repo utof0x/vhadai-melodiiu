@@ -351,6 +351,37 @@ input {
   gap: 3vh;
 }
 
+.setup-room {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.6vh;
+  min-height: 9vh;
+  justify-content: center;
+}
+
+.setup-room-code {
+  font-size: clamp(30px, 4vw, 68px);
+  font-weight: 900;
+  letter-spacing: 0.22em;
+  line-height: 1;
+  /* letter-spacing also trails the last letter; pull it back to stay centred */
+  margin-right: -0.22em;
+  color: var(--gold-light);
+  text-shadow: 0 0 26px rgba(240, 195, 90, 0.55);
+}
+
+.setup-room-note {
+  font-size: clamp(12px, 1.1vw, 18px);
+  font-weight: 500;
+  color: var(--violet-light);
+}
+
+.setup-room-note b {
+  font-weight: 800;
+  color: var(--white);
+}
+
 .setup-inputs {
   display: grid;
   grid-template-columns: repeat(2, minmax(220px, 24vw));
@@ -369,6 +400,20 @@ input {
   letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--violet-light);
+}
+
+.setup-phone {
+  margin-left: 0.8em;
+  letter-spacing: 0.04em;
+  color: #6fe39a;
+}
+
+.setup-phone::before {
+  content: "● ";
+}
+
+.setup-input.has-phone {
+  border-color: #6fe39a;
 }
 
 .setup-input {
@@ -468,6 +513,17 @@ input {
   color: rgba(255, 255, 255, 0.45);
 }
 
+.player-plate-phone {
+  position: absolute;
+  top: 1vh;
+  right: 0.8vw;
+  width: clamp(7px, 0.6vw, 11px);
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: #6fe39a;
+  box-shadow: 0 0 8px #6fe39a;
+}
+
 .player-plate-name {
   max-width: 100%;
   overflow: hidden;
@@ -560,6 +616,17 @@ input {
   opacity: 0.2;
   box-shadow: none;
   text-decoration: line-through;
+}
+
+/* the picked theme, framed like its tile on the board */
+.song-theme {
+  padding: 2.2vh 3.5vw;
+  font-size: clamp(16px, 2.1vw, 36px);
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  line-height: 1.15;
+  text-align: center;
+  text-transform: uppercase;
 }
 
 /* ── Song stage (race) ─────────────────────────────── */
@@ -721,14 +788,6 @@ input {
 }
 
 /* ── Final ─────────────────────────────────────────── */
-.final-player {
-  padding: 0.4em 1.6em;
-  font-size: clamp(18px, 2.2vw, 38px);
-  font-weight: 800;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-
 .final-row {
   display: flex;
   align-items: center;
@@ -744,6 +803,8 @@ input {
 }
 
 .final-disc {
+  padding: 0;
+  cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -758,6 +819,10 @@ input {
     transform 0.25s ease,
     box-shadow 0.25s ease,
     background 0.3s ease;
+}
+
+.final-disc:disabled {
+  cursor: default;
 }
 
 .final-disc.guessed {
@@ -798,11 +863,12 @@ input {
   transform: scaleX(-1);
 }
 
-.final-disc.current .final-disc-wave i {
+/* only the melody that is actually sounding moves */
+.final-disc.playing .final-disc-wave i {
   animation: wave-bounce 0.5s ease-in-out infinite alternate;
 }
 
-.final-disc.current .final-disc-wave i:nth-child(odd) {
+.final-disc.playing .final-disc-wave i:nth-child(odd) {
   animation-delay: 0.2s;
 }
 
@@ -846,9 +912,30 @@ input {
 .final-status {
   min-height: 30vh;
   display: flex;
-  align-items: flex-start;
-  justify-content: center;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 3vh;
   padding-top: 2vh;
+}
+
+.final-skip {
+  color: var(--gold-light);
+  border: 2px solid var(--gold);
+  background: rgba(240, 195, 90, 0.1);
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    opacity 0.15s ease;
+}
+
+.final-skip:hover:not(:disabled) {
+  background: rgba(240, 195, 90, 0.25);
+}
+
+.final-skip:disabled {
+  opacity: 0.3;
+  cursor: default;
 }
 
 .final-outcome {

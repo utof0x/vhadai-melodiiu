@@ -3,10 +3,11 @@ interface Props {
   score?: number
   hotkey?: string
   state?: 'idle' | 'active' | 'locked'
+  phone?: boolean // a phone buzzer is connected for this player
   onClick?: () => void
 }
 
-export default function PlayerPlate({ name, score, hotkey, state = 'idle', onClick }: Props) {
+export default function PlayerPlate({ name, score, hotkey, state = 'idle', phone, onClick }: Props) {
   return (
     <button
       type="button"
@@ -17,6 +18,7 @@ export default function PlayerPlate({ name, score, hotkey, state = 'idle', onCli
       disabled={!onClick}
     >
       {hotkey && <span className="player-plate-key">{hotkey}</span>}
+      {phone && <span className="player-plate-phone" title="телефон підключено" />}
       <span className="player-plate-name">{name}</span>
       {score !== undefined && <span className="player-plate-score">{score}</span>}
     </button>

@@ -29,7 +29,7 @@ export const RACE_THEMES: RaceTheme[] = [
   { title: "Ані стоячи, ані лежачи" },
   { title: "Зроби голосніше", song: TURN_IT_UP },
   { title: "Дівчата таких люблять" },
-  { title: "З Новим роком", song: HAPPIEST_YEAR },
+  { title: "З Новим роком" },
   { title: "Відчуй мене без слів" },
 ];
 

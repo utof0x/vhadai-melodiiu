@@ -1,6 +1,6 @@
 import { useEffect, useEffectEvent, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
-import type { FinalResult, RoundPlayer } from '../types'
+import type { FinalResult } from '../types'
 import { FINAL_SECONDS, FINAL_SONGS } from '../data/songs'
 import { playDing, playWrong } from '../sfx'
 import KeyHints from './KeyHints'
@@ -12,15 +12,14 @@ import KeyHints from './KeyHints'
 type Stage = 'ready' | 'playing' | 'stopped' | FinalResult['outcome']
 
 interface Props {
-  player: RoundPlayer
   onDone: (result: FinalResult) => void
   onBack: () => void
 }
 
 const HINTS: Record<Stage, [string, string][]> = {
   ready: [['Space', 'старт'], ['←', 'назад']],
-  playing: [['Space', 'стоп — гравець відповідає'], ['→', 'пропустити']],
-  stopped: [['Enter', 'правильно'], ['Backspace', 'неправильно'], ['Esc', 'грати далі']],
+  playing: [['Space', 'стоп — гравець відповідає'], ['→', 'пропустити'], ['клік на номер', 'обрати мелодію']],
+  stopped: [['Enter', 'правильно'], ['Backspace', 'неправильно'], ['→', 'пропустити'], ['Esc', 'грати далі']],
   won: [['Space', 'далі']],
   wrong: [['Space', 'далі']],
   timeout: [['Space', 'далі']],
@@ -35,7 +34,7 @@ const OUTCOME_TEXT: Record<FinalResult['outcome'], string> = {
 const TOTAL_MS = FINAL_SECONDS * 1000
 const WAVE_BARS = [0.35, 0.7, 1, 0.55, 0.8]
 
-export default function FinalRound({ player, onDone, onBack }: Props) {
+export default function FinalRound({ onDone, onBack }: Props) {
   const [stage, setStage] = useState<Stage>('ready')
   const [guessed, setGuessed] = useState<boolean[]>(() => FINAL_SONGS.map(() => false))
   const [current, setCurrent] = useState(0)
@@ -46,6 +45,7 @@ export default function FinalRound({ player, onDone, onBack }: Props) {
 
   const isOver = stage === 'won' || stage === 'wrong' || stage === 'timeout'
   const guessedCount = guessed.filter(Boolean).length
+  const canSkip = stage === 'playing' || stage === 'stopped'
 
   function playSong(i: number) {
     let audio = audiosRef.current[i]
@@ -73,6 +73,12 @@ export default function FinalRound({ player, onDone, onBack }: Props) {
     }
     return null
   }
+
+  // where a skip would land; null when the current melody is the only one left
+  const skipTarget = (() => {
+    const next = nextPending(current, guessed)
+    return next === null || next === current ? null : next
+  })()
 
   const timeUp = useEffectEvent(() => {
     pauseAll()
@@ -103,12 +109,25 @@ export default function FinalRound({ player, onDone, onBack }: Props) {
     setStage('stopped')
   }
 
-  function skip() {
-    const next = nextPending(current, guessed)
-    if (next === null || next === current) return
+  // jumps to a melody and plays it; also how a stopped melody is left unanswered
+  function goTo(i: number) {
     pauseAll()
-    setCurrent(next)
-    playSong(next)
+    setCurrent(i)
+    playSong(i)
+    setStage('playing')
+  }
+
+  // the skipped melody stays pending and comes round again after the others
+  function skip() {
+    if (stage !== 'playing' && stage !== 'stopped') return
+    if (skipTarget !== null) goTo(skipTarget)
+  }
+
+  // clicking a number picks that melody; clicking the current one stops or resumes it
+  function clickDisc(i: number) {
+    if (isOver || guessed[i]) return
+    if (i !== current || stage !== 'playing') goTo(i)
+    else stop()
   }
 
   function judge(correct: boolean) {
@@ -126,9 +145,7 @@ export default function FinalRound({ player, onDone, onBack }: Props) {
       setStage('won')
       return
     }
-    setCurrent(next)
-    playSong(next)
-    setStage('playing')
+    goTo(next)
   }
 
   const onKey = useEffectEvent((e: KeyboardEvent) => {
@@ -145,6 +162,7 @@ export default function FinalRound({ player, onDone, onBack }: Props) {
     } else if (stage === 'stopped') {
       if (e.code === 'Enter') judge(true)
       else if (e.code === 'Backspace') judge(false)
+      else if (e.code === 'ArrowRight') skip()
       else if (e.code === 'Escape') start()
     } else if (isForward && (stage === 'won' || stage === 'wrong' || stage === 'timeout')) {
       onDone({ guessed: guessedCount, total: FINAL_SONGS.length, outcome: stage })
@@ -163,21 +181,27 @@ export default function FinalRound({ player, onDone, onBack }: Props) {
     <div className="screen round-screen final-screen">
       <div className="round-header">
         <span className="pill gold-pill">Фінал</span>
-        <span className="final-player neon-block">{player.name}</span>
       </div>
 
       <div className="round-body">
         <div className="final-row">
           <div className="final-discs">
             {FINAL_SONGS.map((_, i) => (
-              <div
+              <button
                 key={i}
-                className={`final-disc${guessed[i] ? ' guessed' : ''}${i === current && !isOver ? ' current' : ''}`}
+                type="button"
+                className={`final-disc${guessed[i] ? ' guessed' : ''}${i === current && !isOver ? ' current' : ''}${
+                  i === current && stage === 'playing' ? ' playing' : ''
+                }`}
+                disabled={isOver || guessed[i]}
+                // keeps keyboard focus off the disc, so Space/Enter never re-trigger the click
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => clickDisc(i)}
               >
                 <Wave />
                 <span className="final-disc-number">{i + 1}</span>
                 <Wave />
-              </div>
+              </button>
             ))}
           </div>
           <div
@@ -190,6 +214,17 @@ export default function FinalRound({ player, onDone, onBack }: Props) {
 
         <div className="final-status">
           {stage === 'ready' && <span className="song-stage-note">{FINAL_SONGS.length} мелодій · {FINAL_SECONDS} секунд</span>}
+          {canSkip && (
+            <button
+              type="button"
+              className="pill final-skip"
+              disabled={skipTarget === null}
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={skip}
+            >
+              Пропустити →
+            </button>
+          )}
           {stage === 'stopped' && (
             <motion.span
               className="song-stage-answering"

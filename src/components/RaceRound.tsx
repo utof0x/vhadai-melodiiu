@@ -1,14 +1,15 @@
-import { useEffect, useEffectEvent, useRef, useState } from 'react'
+import { useEffect, useEffectEvent, useRef, useState, useSyncExternalStore } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import type { RoundPlayer } from '../types'
 import { RACE_POINTS, RACE_THEMES } from '../data/songs'
+import { buzzerRoom } from '../buzzer'
 import { playDing, playWrong } from '../sfx'
 import KeyHints from './KeyHints'
 import PlayerPlate from './PlayerPlate'
 import SoundWave from './SoundWave'
 
 // board: the theme grid, waiting for a pick
-// ready: a theme is open, music not started yet
+// ready: a theme is open and the music is paused: before the first play, and again after every wrong answer
 // playing: the instrumental is on, anyone may buzz
 // buzzed: music paused, one player is answering
 // revealed: the answer is on screen and the full track plays
@@ -25,7 +26,7 @@ interface Props {
 const HINTS: Record<Stage, [string, string][]> = {
   board: [['1–8', 'тема'], ['Space', 'далі, коли все зіграно'], ['←', 'назад']],
   ready: [['Space', 'грати'], ['←', 'до тем']],
-  playing: [['1–4', 'хто натиснув'], ['Space', 'ніхто не вгадав']],
+  playing: [['1–4', 'хто натиснув (або кнопка на телефоні)'], ['Space', 'ніхто не вгадав']],
   buzzed: [['Enter', 'правильно'], ['Backspace', 'неправильно'], ['Esc', 'скасувати']],
   revealed: [['Space', 'до тем']],
 }
@@ -38,6 +39,7 @@ export default function RaceRound({ players, scores, onScore, onDone, onBack }: 
   const [lockedOut, setLockedOut] = useState<number[]>([]) // positions that already missed this song
   const [winner, setWinner] = useState<number | null>(null)
   const audioRef = useRef<HTMLAudioElement | null>(null)
+  const phones = useSyncExternalStore(buzzerRoom.subscribe, buzzerRoom.getSnapshot).phones
 
   const theme = current === null ? null : RACE_THEMES[current]
   const allPlayed = RACE_THEMES.every((t, i) => !t.song || played[i])
@@ -58,9 +60,12 @@ export default function RaceRound({ players, scores, onScore, onDone, onBack }: 
     setStage('ready')
   }
 
+  // starts the melody, or picks it up where a wrong answer paused it
   function startSong() {
     const src = theme?.song?.minus
-    if (src) {
+    if (audioRef.current) {
+      audioRef.current.play().catch(() => {})
+    } else if (src) {
       const audio = new Audio(src)
       audio.loop = true
       audioRef.current = audio
@@ -107,8 +112,13 @@ export default function RaceRound({ players, scores, onScore, onDone, onBack }: 
     const nextLocked = [...lockedOut, buzzer]
     setLockedOut(nextLocked)
     // once everyone has missed there is nobody left to buzz
-    if (nextLocked.length >= players.length) reveal(null)
-    else resume()
+    if (nextLocked.length >= players.length) {
+      reveal(null)
+      return
+    }
+    // the music stays paused until the host starts it again
+    setBuzzer(null)
+    setStage('ready')
   }
 
   function closeSong() {
@@ -131,6 +141,7 @@ export default function RaceRound({ players, scores, onScore, onDone, onBack }: 
     } else if (stage === 'ready') {
       if (isForward) startSong()
       else if (e.code === 'ArrowLeft') {
+        stopAudio()
         setCurrent(null)
         setStage('board')
       }
@@ -152,11 +163,31 @@ export default function RaceRound({ players, scores, onScore, onDone, onBack }: 
     return () => window.removeEventListener('keydown', handler)
   }, [])
 
+  // a tap on a phone is the same buzz as the host pressing that player's number
+  const onPhoneBuzz = useEffectEvent((playerIndex: number) => {
+    const pos = players.findIndex((p) => p.index === playerIndex)
+    if (pos >= 0) buzz(pos)
+  })
+
+  useEffect(() => buzzerRoom.onBuzz((playerIndex) => onPhoneBuzz(playerIndex)), [])
+
+  // the phones mirror the stage: live while the melody plays, minus whoever already missed
+  useEffect(() => {
+    if (stage === 'playing') buzzerRoom.arm(lockedOut.map((pos) => players[pos].index))
+    else if (stage === 'buzzed' && buzzer !== null) buzzerRoom.showBuzzed(players[buzzer].index)
+    else buzzerRoom.idle()
+  }, [stage, lockedOut, buzzer, players])
+
+  useEffect(() => () => buzzerRoom.idle(), [])
+
   return (
     <div className="screen round-screen">
       <div className="round-header">
-        <span className="pill gold-pill">Наввипередки</span>
-        {theme && <span className="round-header-theme">{theme.title}</span>}
+        {theme ? (
+          <span className="song-theme neon-block">{theme.title}</span>
+        ) : (
+          <span className="pill gold-pill">Наввипередки</span>
+        )}
       </div>
 
       <div className="round-body">
@@ -198,7 +229,6 @@ export default function RaceRound({ players, scores, onScore, onDone, onBack }: 
             >
               <SoundWave playing={stage === 'playing' || stage === 'revealed'} />
               <div className="song-stage-caption">
-                {stage === 'ready' && <span className="song-stage-note">Готові?</span>}
                 {stage === 'playing' && <span className="song-stage-note">Хто перший?</span>}
                 {stage === 'buzzed' && buzzer !== null && (
                   <motion.span
@@ -237,6 +267,7 @@ export default function RaceRound({ players, scores, onScore, onDone, onBack }: 
             name={p.name}
             score={scores[p.index]}
             hotkey={String(pos + 1)}
+            phone={phones[p.index]}
             state={
               stage === 'board'
                 ? 'idle'

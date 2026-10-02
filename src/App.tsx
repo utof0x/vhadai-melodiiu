@@ -1,6 +1,7 @@
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useMemo } from 'react'
 import type { FinalResult, GameState, RoundId, RoundPlayer } from './types'
 import { DEFAULT_PLAYER_NAMES, PLAYER_COUNT } from './types'
+import { buzzerRoom } from './buzzer'
 import AnimatedBackground from './components/AnimatedBackground'
 import SetupScreen from './components/SetupScreen'
 import TitleScreen from './components/TitleScreen'
@@ -18,11 +19,11 @@ const NO_SCORES = ALL_PLAYERS.map(() => 0)
 const PICK_COUNT: Record<RoundId, number> = { race: 2, bid: 1, final: 0 }
 const NEXT_ROUND: Record<RoundId, RoundId> = { race: 'bid', bid: 'final', final: 'final' }
 
-function initialState(playerNames: string[] = DEFAULT_PLAYER_NAMES): GameState {
+function initialState(): GameState {
   return {
     phase: 'setup',
     round: 'race',
-    playerNames,
+    playerNames: DEFAULT_PLAYER_NAMES, // replaced by what the setup screen collects
     active: ALL_PLAYERS,
     scores: NO_SCORES,
     roundStartScores: NO_SCORES,
@@ -43,8 +44,8 @@ export default function App() {
     setState((prev) => {
       if (prev.phase === 'title') return enterRound(prev, 'race', ALL_PLAYERS, NO_SCORES)
       if (prev.phase === 'round-start') return { ...prev, phase: prev.round }
-      // new game goes back to setup with the current names prefilled
-      if (prev.phase === 'game-end') return initialState(prev.playerNames)
+      // new game goes back to setup; the buzzer room still holds the names and the phones
+      if (prev.phase === 'game-end') return initialState()
       return prev
     })
   }, [])
@@ -103,13 +104,26 @@ export default function App() {
     return () => window.removeEventListener('keydown', onKey)
   }, [state.phase, advance, goBack])
 
-  const players: RoundPlayer[] = state.active.map((index) => ({ index, name: state.playerNames[index] }))
+  // open the phone-buzzer room once; it outlives individual games
+  useEffect(() => {
+    buzzerRoom.connect()
+  }, [])
+
+  // only while the setup screen is up may a joining phone rename its slot
+  useEffect(() => {
+    buzzerRoom.setSetupOpen(state.phase === 'setup')
+  }, [state.phase])
+
+  const players: RoundPlayer[] = useMemo(
+    () => state.active.map((index) => ({ index, name: state.playerNames[index] })),
+    [state.active, state.playerNames],
+  )
   const isPlaying = state.phase === 'race' || state.phase === 'bid' || state.phase === 'final'
 
   return (
     <div className={`app${showHints ? '' : ' hints-hidden'}${state.round === 'final' && isPlaying ? ' tone-gold' : ''}`}>
       <AnimatedBackground mode={isPlaying ? 'rain' : 'idle'} tone={state.phase === 'final' ? 'gold' : 'purple'} />
-      {state.phase === 'setup' && <SetupScreen playerNames={state.playerNames} onStart={startGame} />}
+      {state.phase === 'setup' && <SetupScreen onStart={startGame} />}
       {state.phase === 'title' && <TitleScreen />}
       {state.phase === 'round-start' && <TitleScreen round={state.round} />}
       {state.phase === 'race' && (
@@ -118,7 +132,7 @@ export default function App() {
       {state.phase === 'bid' && (
         <BidRound players={players} scores={state.scores} onScore={addScore} onDone={finishRound} onBack={goBack} />
       )}
-      {state.phase === 'final' && <FinalRound player={players[0]} onDone={finishFinal} onBack={goBack} />}
+      {state.phase === 'final' && <FinalRound onDone={finishFinal} onBack={goBack} />}
       {state.phase === 'standings' && (
         <StandingsScreen
           round={state.round}
