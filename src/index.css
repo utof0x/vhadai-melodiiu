@@ -124,6 +124,9 @@ input {
 /* ── Logo ──────────────────────────────────────────── */
 .logo {
   position: relative;
+  /* keeps the oversized backdrop from painting over whatever follows the logo */
+  isolation: isolate;
+  z-index: 0;
   display: grid;
   place-items: center;
   font-size: clamp(48px, 9.5vw, 180px);
@@ -135,47 +138,136 @@ input {
   padding: 0.5em 0.4em;
 }
 
-.logo-rings,
-.logo-arc {
+/* zero-size anchor at the logo's centre; everything in it is placed in em from there */
+.logo-backdrop {
   position: absolute;
   top: 50%;
   left: 50%;
-  width: 5.4em;
-  height: 5.4em;
-  border-radius: 50%;
-  transform: translate(-50%, -50%);
+  width: 0;
+  height: 0;
   pointer-events: none;
 }
 
-/* vinyl-like grooves behind the wordmark */
-.logo-rings {
-  background: repeating-radial-gradient(
-    circle,
-    transparent 0 0.17em,
-    rgba(240, 195, 90, 0.4) 0.17em 0.19em
-  );
-  -webkit-mask-image: radial-gradient(circle, #000 25%, transparent 70%);
-  mask-image: radial-gradient(circle, #000 25%, transparent 70%);
+.logo-glow,
+.logo-grooves,
+.logo-strand {
+  position: absolute;
+  top: calc(var(--d) / -2);
+  left: calc(var(--d) / -2);
+  width: var(--d);
+  height: var(--d);
+  border-radius: 50%;
 }
 
-/* a bright gold streak circling the grooves */
-.logo-arc {
-  background: conic-gradient(
-    from 0deg,
-    transparent 0 55%,
-    rgba(240, 195, 90, 0.85) 82%,
-    var(--white) 88%,
-    transparent 90%
+/* violet haze the disc sits in */
+.logo-glow {
+  --d: 6.6em;
+  background: radial-gradient(
+    circle,
+    rgba(70, 30, 150, 0.55) 0%,
+    rgba(110, 50, 210, 0.3) 38%,
+    rgba(110, 50, 210, 0) 70%
   );
-  -webkit-mask-image: radial-gradient(circle, transparent 63%, #000 64% 67%, transparent 68%);
-  mask-image: radial-gradient(circle, transparent 63%, #000 64% 67%, transparent 68%);
-  filter: drop-shadow(0 0 0.08em var(--gold));
-  animation: logo-spin 9s linear infinite;
+}
+
+/* thin vinyl grooves, running well past the gold ring and fading out */
+.logo-grooves {
+  --d: 8em;
+  background: repeating-radial-gradient(
+    circle,
+    transparent 0 0.21em,
+    rgba(222, 200, 255, 0.34) 0.21em calc(0.21em + 1.5px)
+  );
+  -webkit-mask-image: radial-gradient(circle closest-side, #000 0%, #000 45%, transparent 100%);
+  mask-image: radial-gradient(circle closest-side, #000 0%, #000 45%, transparent 100%);
+}
+
+.logo-small .logo-grooves {
+  --d: 5.4em;
+}
+
+/* the glow lives on the wrapper: a filter on a masked strand would be clipped by its own mask */
+.logo-strands {
+  position: absolute;
+  filter: drop-shadow(0 0 0.035em #ffb347) drop-shadow(0 0 0.14em rgba(255, 140, 40, 0.6));
+}
+
+/* one fiery strand: a conic sweep of gold, cut down to a ring of thickness --t */
+.logo-strand {
+  background: conic-gradient(
+    from var(--from),
+    transparent 0%,
+    rgba(240, 170, 60, 0.25) 6%,
+    #f0b040 18%,
+    #fff0c0 27%,
+    #ffb347 34%,
+    rgba(240, 170, 60, 0.45) 46%,
+    transparent 56%,
+    rgba(240, 170, 60, 0.3) 66%,
+    #f6c860 78%,
+    #fff6d8 84%,
+    rgba(255, 160, 50, 0.4) 92%,
+    transparent 100%
+  );
+  -webkit-mask-image: radial-gradient(
+    farthest-side,
+    transparent calc(100% - var(--t) - 1px),
+    #000 calc(100% - var(--t)),
+    #000 calc(100% - 1px),
+    transparent 100%
+  );
+  mask-image: radial-gradient(
+    farthest-side,
+    transparent calc(100% - var(--t) - 1px),
+    #000 calc(100% - var(--t)),
+    #000 calc(100% - 1px),
+    transparent 100%
+  );
+  animation: logo-spin linear infinite;
 }
 
 @keyframes logo-spin {
   to {
-    transform: translate(-50%, -50%) rotate(360deg);
+    rotate: 360deg;
+  }
+}
+
+.logo-bubble,
+.logo-note {
+  position: absolute;
+  top: var(--y);
+  left: var(--x);
+  animation: logo-float 7s ease-in-out infinite alternate;
+}
+
+.logo-bubble {
+  width: var(--s);
+  height: var(--s);
+  border-radius: 50%;
+  background: radial-gradient(
+    circle at 32% 28%,
+    rgba(255, 255, 255, 0.95) 0 8%,
+    hsl(var(--hue) 85% 76% / 0.8) 24%,
+    hsl(var(--hue) 70% 46% / 0.6) 62%,
+    hsl(var(--hue) 80% 26% / 0.4) 100%
+  );
+  box-shadow: 0 0 0.08em hsl(var(--hue) 90% 70% / 0.6);
+}
+
+.logo-note {
+  font-size: var(--s);
+  font-weight: 400;
+  line-height: 1;
+  color: rgba(214, 176, 255, 0.6);
+  text-shadow: 0 0 0.3em rgba(180, 92, 255, 0.8);
+}
+
+@keyframes logo-float {
+  from {
+    translate: 0 0.06em;
+  }
+  to {
+    translate: 0 -0.08em;
   }
 }
 
@@ -191,34 +283,52 @@ input {
 }
 
 .logo-top {
-  margin-bottom: -0.06em;
+  margin-bottom: -0.04em;
   padding: 0.06em 0.28em 0.08em;
-  border-radius: 0.14em;
+  border-radius: 0.12em;
   font-size: 0.62em;
-  color: #1c0a3d;
-  background: linear-gradient(180deg, #fffaf0 0%, var(--gold-light) 50%, #dcb563 100%);
+  background: linear-gradient(180deg, #fffdf5 0%, #fbeec6 45%, #e6c67a 100%);
+  /* stepped shadows build the plate's bronze side wall */
   box-shadow:
-    0 0.05em 0 #b98a2f,
-    0 0.1em 0 var(--gold-dark),
-    0 0.2em 0.35em rgba(0, 0, 0, 0.6);
+    inset 0 0 0 0.03em rgba(255, 255, 255, 0.75),
+    inset 0 -0.05em 0.06em rgba(170, 120, 40, 0.45),
+    0 0.03em 0 #e0b455,
+    0 0.06em 0 #c9993a,
+    0 0.09em 0 #a87a26,
+    0 0.12em 0 #86601a,
+    0 0.15em 0 #6b4a12,
+    0 0.28em 0.35em rgba(0, 0, 0, 0.65);
   z-index: 1;
+}
+
+.logo-top span {
+  display: block;
+  /* room for the breve of «Й»: background-clip only paints inside the box */
+  margin-top: -0.14em;
+  padding-top: 0.14em;
+  color: transparent;
+  background: linear-gradient(180deg, #3d2080 0%, #1c0a3d 55%, #120628 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  filter: drop-shadow(0 0.02em 0 rgba(255, 255, 255, 0.8));
 }
 
 .logo-bottom {
   color: transparent;
-  background: linear-gradient(180deg, #fffaf0 0%, var(--gold-light) 45%, #d8ae4c 100%);
+  background: linear-gradient(180deg, #fffdf5 0%, #fbeec6 42%, #e6c67a 100%);
   -webkit-background-clip: text;
   background-clip: text;
   /* stacked drop-shadows fake the extruded 3D lettering; text-shadow would
      paint over a background-clip gradient, filters composite after it */
-  filter: drop-shadow(0 0.025em 0 #c9993a) drop-shadow(0 0.025em 0 #a87a26) drop-shadow(0 0.03em 0 #7a5516)
-    drop-shadow(0 0.1em 0.14em rgba(0, 0, 0, 0.65));
+  filter: drop-shadow(0.004em 0.022em 0 #e0b455) drop-shadow(0.004em 0.022em 0 #c9993a)
+    drop-shadow(0.004em 0.022em 0 #a87a26) drop-shadow(0.004em 0.022em 0 #86601a)
+    drop-shadow(0.004em 0.022em 0 #6b4a12) drop-shadow(0 0.1em 0.14em rgba(0, 0, 0, 0.7));
 }
 
 /* ── Title / round-start ───────────────────────────── */
 .round-label {
   position: absolute;
-  bottom: 9vh;
+  bottom: 4vh;
   display: flex;
   flex-direction: column;
   align-items: center;

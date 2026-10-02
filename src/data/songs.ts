@@ -17,7 +17,7 @@ const STAR = track(7, "Зірочка палай", "Аня Трінчер");
 const MARSHRUTKA = track(8, "Маршрутка", "Скрябін");
 
 export const RACE_POINTS = 10;
-export const BID_POINTS = 10;
+export const BID_POINTS = 20;
 export const BID_START = 10;
 export const FINAL_SECONDS = 30;
 

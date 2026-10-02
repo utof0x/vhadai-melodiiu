@@ -12,6 +12,7 @@ import GameEndScreen from './components/GameEndScreen'
 import './App.css'
 
 const ALL_PLAYERS = Array.from({ length: PLAYER_COUNT }, (_, i) => i)
+const NO_SCORES = ALL_PLAYERS.map(() => 0)
 
 // how many players the round sends through to the next one
 const PICK_COUNT: Record<RoundId, number> = { race: 2, bid: 1, final: 0 }
@@ -23,14 +24,15 @@ function initialState(playerNames: string[] = DEFAULT_PLAYER_NAMES): GameState {
     round: 'race',
     playerNames,
     active: ALL_PLAYERS,
-    scores: ALL_PLAYERS.map(() => 0),
+    scores: NO_SCORES,
+    roundStartScores: NO_SCORES,
     finalResult: null,
   }
 }
 
-// every round starts from its interstitial with a clean score sheet
-function enterRound(prev: GameState, round: RoundId, active: number[]): GameState {
-  return { ...prev, phase: 'round-start', round, active, scores: ALL_PLAYERS.map(() => 0), finalResult: null }
+// every round starts from its interstitial, with the scores it was entered with
+function enterRound(prev: GameState, round: RoundId, active: number[], scores: number[]): GameState {
+  return { ...prev, phase: 'round-start', round, active, scores, roundStartScores: scores, finalResult: null }
 }
 
 export default function App() {
@@ -39,7 +41,7 @@ export default function App() {
 
   const advance = useCallback(() => {
     setState((prev) => {
-      if (prev.phase === 'title') return enterRound(prev, 'race', ALL_PLAYERS)
+      if (prev.phase === 'title') return enterRound(prev, 'race', ALL_PLAYERS, NO_SCORES)
       if (prev.phase === 'round-start') return { ...prev, phase: prev.round }
       // new game goes back to setup with the current names prefilled
       if (prev.phase === 'game-end') return initialState(prev.playerNames)
@@ -47,15 +49,15 @@ export default function App() {
     })
   }, [])
 
-  // going back restarts the current round; earlier rounds can't be reopened
-  // because their scores are gone once the next one starts
+  // going back restarts the current round from the scores it began with;
+  // earlier rounds can't be reopened
   const goBack = useCallback(() => {
     setState((prev) => {
       const { phase, round } = prev
       if (phase === 'title') return { ...prev, phase: 'setup' }
       if (phase === 'round-start') return round === 'race' ? { ...prev, phase: 'title' } : prev
       if (phase === 'race' || phase === 'bid' || phase === 'final' || phase === 'standings' || phase === 'game-end') {
-        return enterRound(prev, round, prev.active)
+        return enterRound(prev, round, prev.active, prev.roundStartScores)
       }
       return prev
     })
@@ -74,7 +76,7 @@ export default function App() {
   }, [])
 
   const confirmStandings = useCallback((picked: number[]) => {
-    setState((prev) => (prev.phase === 'standings' ? enterRound(prev, NEXT_ROUND[prev.round], picked) : prev))
+    setState((prev) => (prev.phase === 'standings' ? enterRound(prev, NEXT_ROUND[prev.round], picked, prev.scores) : prev))
   }, [])
 
   const finishFinal = useCallback((finalResult: FinalResult) => {

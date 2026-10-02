@@ -48,6 +48,7 @@ export interface GameState {
   round: RoundId;
   playerNames: string[]; // entered on the setup screen, defaults when left blank
   active: number[]; // indices into playerNames of who plays the current round
-  scores: number[]; // per player, for the current round only; reset when a round starts
+  scores: number[]; // per player; race points carry over into the bid round
+  roundStartScores: number[]; // scores as the current round began, restored when the round is replayed
   finalResult: FinalResult | null;
 }
