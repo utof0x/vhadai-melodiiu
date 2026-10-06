@@ -20,6 +20,11 @@ export const PLAYER_COUNT = 4;
 
 export const DEFAULT_PLAYER_NAMES: string[] = Array.from({ length: PLAYER_COUNT }, (_, i) => `Гравець ${i + 1}`);
 
+export const ROUND_ORDER: RoundId[] = ["quiz", "race", "bid", "final"];
+
+// how many players are still in when the round begins
+export const ROUND_PLAYERS: Record<RoundId, number> = { quiz: 4, race: 3, bid: 2, final: 1 };
+
 export const ROUND_TITLES: Record<RoundId, { label: string; name: string }> = {
   quiz: { label: "Розминка", name: "Три варіанти" },
   race: { label: "Раунд 1", name: "Наввипередки" },

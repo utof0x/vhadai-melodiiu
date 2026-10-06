@@ -72,8 +72,13 @@ export default function App() {
     })
   }, [])
 
-  const startGame = useCallback((playerNames: string[]) => {
-    setState((prev) => (prev.phase === 'setup' ? { ...prev, phase: 'title', playerNames } : prev))
+  const startGame = useCallback((playerNames: string[], round: RoundId, active: number[]) => {
+    setState((prev) => {
+      if (prev.phase !== 'setup') return prev
+      if (round === 'quiz') return { ...prev, phase: 'title', playerNames }
+      // recovery: start at a later round with whoever is still in; scores start level
+      return enterRound({ ...prev, playerNames }, round, active, NO_SCORES)
+    })
   }, [])
 
   const addScore = useCallback((playerIndex: number, delta: number) => {

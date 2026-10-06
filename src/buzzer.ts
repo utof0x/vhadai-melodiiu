@@ -9,6 +9,11 @@ const CODE_CHARS = '0123456789' // digits only, to match what the buzz-in page a
 const CODE_LENGTH = 3
 const MAX_ID_ATTEMPTS = 5
 const NAME_MAX = 20
+const HEARTBEAT_MS = 3000 // how often every phone is re-sent the state, as a sign of life
+const PHONE_STALE_MS = 12000 // a phone that pings and then goes quiet this long is treated as gone
+const SAVED_CODE_KEY = 'vhadai-room-code'
+const SAVED_CODE_ATTEMPTS = 4 // after a reload the old id can stay taken for a moment
+const SAVED_CODE_RETRY_MS = 1500
 
 export const BUZZER_URL = 'utof0x.github.io/buzz-in'
 
@@ -33,6 +38,7 @@ export interface BuzzerSnapshot {
 export interface PhoneLink {
   peerId: string
   send: (msg: unknown) => void
+  close?: () => void
 }
 
 interface Phone {
@@ -40,12 +46,32 @@ interface Phone {
   name: string
   joinedAt: number
   slot: number
+  deviceId: string | null // stays the same when the phone reconnects under a new peer id
+  lastSeen: number
+  pings: boolean // older buzz-in pages never ping, so their silence means nothing
 }
 
 function genCode() {
   let out = ''
   for (let i = 0; i < CODE_LENGTH; i++) out += CODE_CHARS[Math.floor(Math.random() * CODE_CHARS.length)]
   return out
+}
+
+function loadSavedCode() {
+  try {
+    const code = localStorage.getItem(SAVED_CODE_KEY)
+    return code && /^\d+$/.test(code) && code.length === CODE_LENGTH ? code : null
+  } catch {
+    return null
+  }
+}
+
+function saveCode(code: string) {
+  try {
+    localStorage.setItem(SAVED_CODE_KEY, code)
+  } catch {
+    // private mode: the code just won't survive a reload
+  }
 }
 
 function sameName(a: string | null, b: string) {
@@ -141,9 +167,17 @@ export class BuzzerRoom {
   }
 
   // ── Phones ───────────────────────────────────────────
-  join(link: PhoneLink, rawName: unknown) {
+  join(link: PhoneLink, rawName: unknown, rawDeviceId?: unknown) {
     const name = String(rawName ?? '').trim().slice(0, NAME_MAX) || 'Хтось'
+    const deviceId = typeof rawDeviceId === 'string' && rawDeviceId ? rawDeviceId : null
     this.phones.delete(link.peerId)
+    // the same phone coming back before we noticed it had dropped: its old connection is dead weight
+    for (const [peerId, phone] of this.phones) {
+      if (deviceId !== null && phone.deviceId === deviceId) {
+        this.phones.delete(peerId)
+        phone.link.close?.()
+      }
+    }
 
     const free = this.names.map((_, slot) => slot).filter((slot) => !this.phoneAt(slot))
     // a returning player gets their old slot back; a new one takes an unnamed slot first
@@ -157,7 +191,7 @@ export class BuzzerRoom {
       return
     }
 
-    this.phones.set(link.peerId, { link, name, joinedAt: Date.now(), slot })
+    this.phones.set(link.peerId, { link, name, joinedAt: Date.now(), slot, deviceId, lastSeen: Date.now(), pings: false })
     this.phoneNames[slot] = name
     if (this.setupOpen) this.names[slot] = name
     this.emit()
@@ -167,6 +201,28 @@ export class BuzzerRoom {
   leave(peerId: string) {
     if (!this.phones.delete(peerId)) return
     this.emit()
+    this.broadcast()
+  }
+
+  // any message proves the phone is there; only a ping proves it will keep saying so
+  seen(peerId: string, isPing: boolean, now = Date.now()) {
+    const phone = this.phones.get(peerId)
+    if (!phone) return
+    phone.lastSeen = now
+    if (isPing) phone.pings = true
+  }
+
+  // run on a timer: forgets phones that went silent (a dropped connection often never reports
+  // itself closed) and re-sends the state so the phones can tell the game is still there
+  heartbeat(now = Date.now()) {
+    let dropped = false
+    for (const [peerId, phone] of this.phones) {
+      if (!phone.pings || now - phone.lastSeen <= PHONE_STALE_MS) continue
+      this.phones.delete(peerId)
+      phone.link.close?.()
+      dropped = true
+    }
+    if (dropped) this.emit()
     this.broadcast()
   }
 
@@ -258,6 +314,7 @@ export class BuzzerRoom {
     const winner = this.winner === null ? undefined : this.phoneAt(this.winner)
     const payload = {
       type: 'state',
+      hb: true, // tells the phone this host keeps sending, so silence means the link is dead
       game: {
         status: this.buzzStatus,
         roundId: this.roundId,
@@ -292,7 +349,10 @@ export class BuzzerRoom {
     if (this.connectStarted) return
     this.connectStarted = true
     import('peerjs')
-      .then(({ Peer }) => this.createPeer(Peer))
+      .then(({ Peer }) => {
+        this.createPeer(Peer)
+        setInterval(() => this.heartbeat(), HEARTBEAT_MS)
+      })
       .catch(() => {
         this.status = 'failed'
         this.emit()
@@ -301,22 +361,27 @@ export class BuzzerRoom {
 
   private createPeer(PeerCtor: typeof Peer) {
     this.attempts += 1
-    const code = genCode()
+    // a reloaded page first asks for its previous code, so phones that are
+    // already retrying that room find it again without anyone retyping
+    const saved = this.attempts <= SAVED_CODE_ATTEMPTS ? loadSavedCode() : null
+    const code = saved ?? genCode()
     const peer = new PeerCtor(ROOM_PREFIX + code, { debug: 0 })
 
     peer.on('open', () => {
       this.code = code
       this.status = 'open'
+      saveCode(code)
       this.emit()
     })
 
     peer.on('connection', (conn) => {
-      const link: PhoneLink = { peerId: conn.peer, send: (msg) => conn.send(msg) }
+      const link: PhoneLink = { peerId: conn.peer, send: (msg) => conn.send(msg), close: () => conn.close() }
       conn.on('open', () => {
         conn.on('data', (msg) => {
           if (typeof msg !== 'object' || msg === null) return
           const { type, name, roundId, option } = msg as Record<string, unknown>
-          if (type === 'join') this.join(link, name)
+          this.seen(conn.peer, type === 'ping')
+          if (type === 'join') this.join(link, name, (msg as Record<string, unknown>).deviceId)
           else if (type === 'buzz') this.buzz(conn.peer, roundId)
           else if (type === 'answer') this.answer(conn.peer, roundId, option)
         })
@@ -332,9 +397,11 @@ export class BuzzerRoom {
 
     peer.on('error', (err) => {
       if (this.status === 'open') return
-      if (err.type === 'unavailable-id' && this.attempts < MAX_ID_ATTEMPTS) {
+      if (err.type === 'unavailable-id' && this.attempts < SAVED_CODE_ATTEMPTS + MAX_ID_ATTEMPTS) {
         peer.destroy()
-        this.createPeer(PeerCtor)
+        // the saved code is worth waiting for; a random one can be replaced at once
+        if (saved) setTimeout(() => this.createPeer(PeerCtor), SAVED_CODE_RETRY_MS)
+        else this.createPeer(PeerCtor)
         return
       }
       this.status = 'failed'

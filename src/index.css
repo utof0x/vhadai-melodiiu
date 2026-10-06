@@ -432,6 +432,47 @@ input {
   border-color: var(--gold-light);
 }
 
+.setup-input.sitting-out {
+  opacity: 0.35;
+}
+
+.setup-playing,
+.setup-from-option {
+  padding: 0.25em 0.9em;
+  border: 1.5px solid rgba(255, 255, 255, 0.3);
+  border-radius: 999px;
+  background: transparent;
+  font-size: clamp(11px, 0.95vw, 15px);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.55);
+  cursor: pointer;
+}
+
+.setup-playing {
+  margin-left: 0.8em;
+}
+
+.setup-playing.on,
+.setup-from-option.on {
+  border-color: var(--gold);
+  color: var(--gold-light);
+  background: rgba(240, 195, 90, 0.14);
+}
+
+.setup-from {
+  display: flex;
+  align-items: center;
+  gap: 0.8vw;
+}
+
+.setup-start:disabled {
+  opacity: 0.55;
+  cursor: default;
+  transform: none;
+}
+
 .setup-start {
   margin-top: 1vh;
   cursor: pointer;
