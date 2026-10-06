@@ -14,8 +14,12 @@ export const BUZZER_URL = 'utof0x.github.io/buzz-in'
 // connecting: waiting for the PeerJS broker; open: phones can join; failed: keyboard only
 type RoomStatus = 'connecting' | 'open' | 'failed'
 
-// lobby: buttons disabled; armed: first tap wins; buzzed: someone is answering
-type BuzzStatus = 'lobby' | 'armed' | 'buzzed'
+// lobby: buttons disabled; armed: first tap wins; buzzed: someone is answering;
+// choice: every phone picks one of the options; reveal: the right option and who scored
+type BuzzStatus = 'lobby' | 'armed' | 'buzzed' | 'choice' | 'reveal'
+
+// point: right and in time; late: right but the last to answer; wrong; none: never answered
+export type ChoiceResult = 'point' | 'late' | 'wrong' | 'none'
 
 export interface BuzzerSnapshot {
   code: string | null
@@ -62,9 +66,15 @@ export class BuzzerRoom {
   private roundId = 0
   private winner: number | null = null
   private locked: number[] = [] // slots that already missed the current song
+  private active: number[] = Array.from({ length: PLAYER_COUNT }, (_, i) => i) // slots still in the game
+  private options: string[] = []
+  private answers = new Map<number, number>() // slot -> picked option, for the choice on screen
+  private correct: number | null = null
+  private results = new Map<number, ChoiceResult>()
 
   private listeners = new Set<() => void>()
   private buzzListeners = new Set<(slot: number) => void>()
+  private answerListeners = new Set<(slot: number, option: number) => void>()
   private snapshot: BuzzerSnapshot = this.buildSnapshot()
 
   // ── React store ──────────────────────────────────────
@@ -81,6 +91,13 @@ export class BuzzerRoom {
     this.buzzListeners.add(listener)
     return () => {
       this.buzzListeners.delete(listener)
+    }
+  }
+
+  onAnswer(listener: (slot: number, option: number) => void) {
+    this.answerListeners.add(listener)
+    return () => {
+      this.answerListeners.delete(listener)
     }
   }
 
@@ -116,6 +133,12 @@ export class BuzzerRoom {
     this.setupOpen = open
   }
 
+  // players knocked out in earlier rounds keep their phone connected, but it no longer does anything
+  setActive(slots: number[]) {
+    this.active = [...slots]
+    this.broadcast()
+  }
+
   // ── Phones ───────────────────────────────────────────
   join(link: PhoneLink, rawName: unknown) {
     const name = String(rawName ?? '').trim().slice(0, NAME_MAX) || 'Хтось'
@@ -149,12 +172,23 @@ export class BuzzerRoom {
   buzz(peerId: string, roundId: unknown) {
     const phone = this.phones.get(peerId)
     if (!phone || this.buzzStatus !== 'armed' || roundId !== this.roundId) return
-    if (this.locked.includes(phone.slot)) return
+    if (this.locked.includes(phone.slot) || !this.active.includes(phone.slot)) return
     // flip to `buzzed` right here so a second tap can't also get through before React reacts
     this.buzzStatus = 'buzzed'
     this.winner = phone.slot
     this.broadcast()
     for (const listener of this.buzzListeners) listener(phone.slot)
+  }
+
+  answer(peerId: string, roundId: unknown, option: unknown) {
+    const phone = this.phones.get(peerId)
+    if (!phone || this.buzzStatus !== 'choice' || roundId !== this.roundId) return
+    if (!this.active.includes(phone.slot) || this.answers.has(phone.slot)) return
+    if (typeof option !== 'number' || !Number.isInteger(option) || option < 0 || option >= this.options.length) return
+    // recorded right here so a second tap can't change the pick before React reacts
+    this.answers.set(phone.slot, option)
+    this.broadcast()
+    for (const listener of this.answerListeners) listener(phone.slot, option)
   }
 
   // ── Driven by the round on screen ────────────────────
@@ -175,11 +209,42 @@ export class BuzzerRoom {
     this.broadcast()
   }
 
+  // puts the options on every active phone; `answers` (slot -> option) is the round's own
+  // record, which also carries picks the host entered from the keyboard
+  showChoice(options: string[], answers: Map<number, number>) {
+    const fresh = this.buzzStatus !== 'choice' || this.options !== options
+    const sameAnswers = answers.size === this.answers.size && [...answers].every(([s, o]) => this.answers.get(s) === o)
+    if (!fresh && sameAnswers) return
+    if (fresh) this.roundId += 1
+    this.buzzStatus = 'choice'
+    this.winner = null
+    this.locked = []
+    this.options = options
+    this.answers = new Map(answers)
+    this.correct = null
+    this.results = new Map()
+    this.broadcast()
+  }
+
+  showChoiceResult(options: string[], answers: Map<number, number>, correct: number, results: Map<number, ChoiceResult>) {
+    if (this.buzzStatus === 'reveal' && this.options === options) return
+    this.buzzStatus = 'reveal'
+    this.options = options
+    this.answers = new Map(answers)
+    this.correct = correct
+    this.results = new Map(results)
+    this.broadcast()
+  }
+
   idle() {
     if (this.buzzStatus === 'lobby') return
     this.buzzStatus = 'lobby'
     this.winner = null
     this.locked = []
+    this.options = []
+    this.answers = new Map()
+    this.correct = null
+    this.results = new Map()
     this.broadcast()
   }
 
@@ -203,6 +268,13 @@ export class BuzzerRoom {
       players: phones.map((p) => ({ id: p.link.peerId, name: this.displayName(p), joinedAt: p.joinedAt })),
       rest: [],
       locked: phones.filter((p) => this.locked.includes(p.slot)).map((p) => p.link.peerId),
+      out: phones.filter((p) => !this.active.includes(p.slot)).map((p) => p.link.peerId),
+      options: this.options,
+      answers: Object.fromEntries(
+        phones.filter((p) => this.answers.has(p.slot)).map((p) => [p.link.peerId, this.answers.get(p.slot)]),
+      ),
+      correct: this.correct,
+      results: Object.fromEntries(phones.map((p) => [p.link.peerId, this.results.get(p.slot) ?? 'none'])),
     }
     for (const phone of phones) {
       try {
@@ -242,9 +314,10 @@ export class BuzzerRoom {
       conn.on('open', () => {
         conn.on('data', (msg) => {
           if (typeof msg !== 'object' || msg === null) return
-          const { type, name, roundId } = msg as { type?: unknown; name?: unknown; roundId?: unknown }
+          const { type, name, roundId, option } = msg as Record<string, unknown>
           if (type === 'join') this.join(link, name)
           else if (type === 'buzz') this.buzz(conn.peer, roundId)
+          else if (type === 'answer') this.answer(conn.peer, roundId, option)
         })
         conn.on('close', () => this.leave(conn.peer))
       })

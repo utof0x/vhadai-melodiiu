@@ -1,4 +1,4 @@
-import type { BidSong, RaceTheme, Song } from "../types";
+import type { BidSong, QuizSong, RaceTheme, Song } from "../types";
 
 const base = import.meta.env.BASE_URL;
 
@@ -16,10 +16,40 @@ const VASYLYNA = track(6, "Василина", "DZIDZIO");
 const STAR = track(7, "Зірочка палай", "Аня Трінчер");
 const MARSHRUTKA = track(8, "Маршрутка", "Скрябін");
 
+export const QUIZ_POINTS = 1;
 export const RACE_POINTS = 10;
 export const BID_POINTS = 20;
 export const BID_START = 10;
-export const FINAL_SECONDS = 30;
+export const FINAL_SECONDS = 40;
+
+// warm-up: everyone picks one of three options on their phone
+export const QUIZ_SONGS: QuizSong[] = [
+  {
+    song: HAPPIEST_YEAR,
+    options: ["Another Love — Tom Odell", "Happiest Year — Jaymes Young", "Someone You Loved — Lewis Capaldi"],
+    correct: 1,
+  },
+  {
+    song: VASYLYNA,
+    options: ["Василина — DZIDZIO", "Я і Сара — DZIDZIO", "Обійми — Океан Ельзи"],
+    correct: 0,
+  },
+  {
+    song: STAR,
+    options: ["Охрана отмєна — Jerry Heil", "Плакала — KAZKA", "Зірочка палай — Аня Трінчер"],
+    correct: 2,
+  },
+  {
+    song: MARSHRUTKA,
+    options: ["Старі фотографії — Скрябін", "Маршрутка — Скрябін", "Люди як кораблі — Скрябін"],
+    correct: 1,
+  },
+  {
+    song: PINA_COLADA,
+    options: ["Пінаколада — Віталій Козловський", "Тримай — Христина Соловій", "Вахтерам — Бумбокс"],
+    correct: 0,
+  },
+];
 
 // 8 tiles, laid out in two columns
 export const RACE_THEMES: RaceTheme[] = [

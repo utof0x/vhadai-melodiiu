@@ -26,7 +26,7 @@ interface Props {
 const HINTS: Record<Stage, [string, string][]> = {
   board: [['1–8', 'тема'], ['Space', 'далі, коли все зіграно'], ['←', 'назад']],
   ready: [['Space', 'грати'], ['←', 'до тем']],
-  playing: [['1–4', 'хто натиснув (або кнопка на телефоні)'], ['Space', 'ніхто не вгадав']],
+  playing: [], // depends on how many players are left, built where it is rendered
   buzzed: [['Enter', 'правильно'], ['Backspace', 'неправильно'], ['Esc', 'скасувати']],
   revealed: [['Space', 'до тем']],
 }
@@ -282,7 +282,13 @@ export default function RaceRound({ players, scores, onScore, onDone, onBack }: 
         ))}
       </div>
 
-      <KeyHints hints={HINTS[stage]} />
+      <KeyHints
+        hints={
+          stage === 'playing'
+            ? [[`1–${players.length}`, 'хто натиснув (або кнопка на телефоні)'], ['Space', 'ніхто не вгадав']]
+            : HINTS[stage]
+        }
+      />
     </div>
   )
 }

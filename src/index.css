@@ -543,6 +543,14 @@ input {
   text-shadow: 0 0 18px rgba(240, 195, 90, 0.5);
 }
 
+.player-plate-note {
+  font-size: clamp(10px, 1vw, 17px);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent-light);
+}
+
 .player-plate.active {
   transform: translateY(-1.2vh) scale(1.07);
   border-color: var(--gold-light);
@@ -695,6 +703,74 @@ input {
   to {
     transform: scaleY(1);
   }
+}
+
+/* ── Warm-up: three options ────────────────────────── */
+.quiz-stage {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3vh;
+  width: 100%;
+}
+
+.quiz-stage .sound-wave {
+  height: 16vh;
+}
+
+.quiz-options {
+  display: flex;
+  flex-direction: column;
+  gap: 1.8vh;
+  width: min(1100px, 72vw);
+}
+
+.quiz-option {
+  display: flex;
+  align-items: center;
+  gap: 1.6vw;
+  padding: 1.8vh 2vw;
+  font-size: clamp(16px, 2vw, 34px);
+  font-weight: 800;
+  line-height: 1.15;
+  transition:
+    opacity 0.3s ease,
+    border-color 0.3s ease,
+    box-shadow 0.3s ease;
+}
+
+.quiz-option-letter {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 1.9em;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  font-weight: 900;
+  color: #2a1700;
+  background: radial-gradient(circle at 35% 30%, #fff6d8 0%, var(--gold) 55%, #b8862a 100%);
+}
+
+.quiz-option.correct {
+  border-color: var(--gold-light);
+  color: var(--gold-light);
+  box-shadow:
+    0 0 34px 6px rgba(240, 195, 90, 0.65),
+    inset 0 0 26px rgba(240, 195, 90, 0.4),
+    0 8px 24px rgba(0, 0, 0, 0.5);
+}
+
+.quiz-option.dimmed {
+  opacity: 0.3;
+}
+
+.quiz-caption {
+  min-height: 1.3em;
+  font-size: clamp(14px, 1.6vw, 28px);
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--accent-light);
 }
 
 /* ── Revealed answer ───────────────────────────────── */

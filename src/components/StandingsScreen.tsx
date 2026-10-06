@@ -78,7 +78,7 @@ export default function StandingsScreen({ round, players, scores, pickCount, onC
               ? 'Нічия — перевірте, хто проходить далі'
               : pickCount === 1
                 ? 'У фінал проходить переможець'
-                : 'Далі проходять двоє найкращих'}
+                : `Далі проходять ${pickCount === 2 ? 'двоє' : 'троє'} найкращих`}
         </div>
       </div>
 

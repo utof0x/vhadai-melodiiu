@@ -1,18 +1,30 @@
-export type GamePhase = "setup" | "title" | "round-start" | "race" | "bid" | "final" | "standings" | "game-end";
+export type GamePhase =
+  | "setup"
+  | "title"
+  | "round-start"
+  | "quiz"
+  | "race"
+  | "bid"
+  | "final"
+  | "standings"
+  | "game-end";
 
-// race: all players, first to buzz names the song; the top two advance
+// each round sends one player home: 4 -> 3 -> 2 -> 1
+// quiz: all four pick the song out of three options on their phones; the top three advance
+// race: first to buzz names the song; the top two advance
 // bid: the two remaining players bid down how few notes they need (notes are played live)
-// final: the winner alone, 30 seconds for 7 songs
-export type RoundId = "race" | "bid" | "final";
+// final: the winner alone, against the clock
+export type RoundId = "quiz" | "race" | "bid" | "final";
 
 export const PLAYER_COUNT = 4;
 
 export const DEFAULT_PLAYER_NAMES: string[] = Array.from({ length: PLAYER_COUNT }, (_, i) => `Гравець ${i + 1}`);
 
 export const ROUND_TITLES: Record<RoundId, { label: string; name: string }> = {
+  quiz: { label: "Розминка", name: "Три варіанти" },
   race: { label: "Раунд 1", name: "Наввипередки" },
   bid: { label: "Раунд 2", name: "10 нот" },
-  final: { label: "Фінал", name: "7 мелодій за 30 секунд" },
+  final: { label: "Фінал", name: "Сім мелодій" },
 };
 
 export interface Song {
@@ -32,6 +44,12 @@ export interface BidSong {
   song: Song;
 }
 
+export interface QuizSong {
+  song: Song;
+  options: string[]; // shown on the phones and on screen
+  correct: number; // index into options
+}
+
 export interface RoundPlayer {
   index: number; // into GameState.playerNames / scores
   name: string;
@@ -48,7 +66,7 @@ export interface GameState {
   round: RoundId;
   playerNames: string[]; // entered on the setup screen, defaults when left blank
   active: number[]; // indices into playerNames of who plays the current round
-  scores: number[]; // per player; race points carry over into the bid round
+  scores: number[]; // per player; quiz points stay in the quiz, race points carry over into the bid round
   roundStartScores: number[]; // scores as the current round began, restored when the round is replayed
   finalResult: FinalResult | null;
 }

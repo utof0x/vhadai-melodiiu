@@ -5,6 +5,7 @@ import { buzzerRoom } from './buzzer'
 import AnimatedBackground from './components/AnimatedBackground'
 import SetupScreen from './components/SetupScreen'
 import TitleScreen from './components/TitleScreen'
+import QuizRound from './components/QuizRound'
 import RaceRound from './components/RaceRound'
 import BidRound from './components/BidRound'
 import FinalRound from './components/FinalRound'
@@ -16,13 +17,13 @@ const ALL_PLAYERS = Array.from({ length: PLAYER_COUNT }, (_, i) => i)
 const NO_SCORES = ALL_PLAYERS.map(() => 0)
 
 // how many players the round sends through to the next one
-const PICK_COUNT: Record<RoundId, number> = { race: 2, bid: 1, final: 0 }
-const NEXT_ROUND: Record<RoundId, RoundId> = { race: 'bid', bid: 'final', final: 'final' }
+const PICK_COUNT: Record<RoundId, number> = { quiz: 3, race: 2, bid: 1, final: 0 }
+const NEXT_ROUND: Record<RoundId, RoundId> = { quiz: 'race', race: 'bid', bid: 'final', final: 'final' }
 
 function initialState(): GameState {
   return {
     phase: 'setup',
-    round: 'race',
+    round: 'quiz',
     playerNames: DEFAULT_PLAYER_NAMES, // replaced by what the setup screen collects
     active: ALL_PLAYERS,
     scores: NO_SCORES,
@@ -42,7 +43,7 @@ export default function App() {
 
   const advance = useCallback(() => {
     setState((prev) => {
-      if (prev.phase === 'title') return enterRound(prev, 'race', ALL_PLAYERS, NO_SCORES)
+      if (prev.phase === 'title') return enterRound(prev, 'quiz', ALL_PLAYERS, NO_SCORES)
       if (prev.phase === 'round-start') return { ...prev, phase: prev.round }
       // new game goes back to setup; the buzzer room still holds the names and the phones
       if (prev.phase === 'game-end') return initialState()
@@ -56,8 +57,15 @@ export default function App() {
     setState((prev) => {
       const { phase, round } = prev
       if (phase === 'title') return { ...prev, phase: 'setup' }
-      if (phase === 'round-start') return round === 'race' ? { ...prev, phase: 'title' } : prev
-      if (phase === 'race' || phase === 'bid' || phase === 'final' || phase === 'standings' || phase === 'game-end') {
+      if (phase === 'round-start') return round === 'quiz' ? { ...prev, phase: 'title' } : prev
+      if (
+        phase === 'quiz' ||
+        phase === 'race' ||
+        phase === 'bid' ||
+        phase === 'final' ||
+        phase === 'standings' ||
+        phase === 'game-end'
+      ) {
         return enterRound(prev, round, prev.active, prev.roundStartScores)
       }
       return prev
@@ -77,7 +85,12 @@ export default function App() {
   }, [])
 
   const confirmStandings = useCallback((picked: number[]) => {
-    setState((prev) => (prev.phase === 'standings' ? enterRound(prev, NEXT_ROUND[prev.round], picked, prev.scores) : prev))
+    setState((prev) => {
+      if (prev.phase !== 'standings') return prev
+      // the warm-up's single points only decide who is cut; the race starts level
+      const scores = prev.round === 'quiz' ? NO_SCORES : prev.scores
+      return enterRound(prev, NEXT_ROUND[prev.round], picked, scores)
+    })
   }, [])
 
   const finishFinal = useCallback((finalResult: FinalResult) => {
@@ -114,11 +127,16 @@ export default function App() {
     buzzerRoom.setSetupOpen(state.phase === 'setup')
   }, [state.phase])
 
+  // knocked-out players' phones stay connected but go dead
+  useEffect(() => {
+    buzzerRoom.setActive(state.active)
+  }, [state.active])
+
   const players: RoundPlayer[] = useMemo(
     () => state.active.map((index) => ({ index, name: state.playerNames[index] })),
     [state.active, state.playerNames],
   )
-  const isPlaying = state.phase === 'race' || state.phase === 'bid' || state.phase === 'final'
+  const isPlaying = state.phase === 'quiz' || state.phase === 'race' || state.phase === 'bid' || state.phase === 'final'
 
   return (
     <div className={`app${showHints ? '' : ' hints-hidden'}${state.round === 'final' && isPlaying ? ' tone-gold' : ''}`}>
@@ -126,6 +144,9 @@ export default function App() {
       {state.phase === 'setup' && <SetupScreen onStart={startGame} />}
       {state.phase === 'title' && <TitleScreen />}
       {state.phase === 'round-start' && <TitleScreen round={state.round} />}
+      {state.phase === 'quiz' && (
+        <QuizRound players={players} scores={state.scores} onScore={addScore} onDone={finishRound} onBack={goBack} />
+      )}
       {state.phase === 'race' && (
         <RaceRound players={players} scores={state.scores} onScore={addScore} onDone={finishRound} onBack={goBack} />
       )}
