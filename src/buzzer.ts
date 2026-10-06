@@ -5,7 +5,8 @@ import { PLAYER_COUNT } from './types'
 // join by the room code and act as buzzers. The message format below is the one
 // that page speaks (see ../buzz-in/index.html), extended with `locked`.
 const ROOM_PREFIX = 'buzzin-'
-const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789' // no 0/O/1/I
+const CODE_CHARS = '0123456789' // digits only, to match what the buzz-in page accepts
+const CODE_LENGTH = 3
 const MAX_ID_ATTEMPTS = 5
 const NAME_MAX = 20
 
@@ -43,7 +44,7 @@ interface Phone {
 
 function genCode() {
   let out = ''
-  for (let i = 0; i < 4; i++) out += CODE_CHARS[Math.floor(Math.random() * CODE_CHARS.length)]
+  for (let i = 0; i < CODE_LENGTH; i++) out += CODE_CHARS[Math.floor(Math.random() * CODE_CHARS.length)]
   return out
 }
 
